@@ -6,6 +6,7 @@ from argparse import ArgumentParser
 import os
 
 import defs
+from utils import rnd_chars
 
 
 def get_top25_as_img(page: pdfium.PdfPage, scale: float = 4) -> PIL.Image.Image:
@@ -47,7 +48,7 @@ def add_page(new: pdfium.PdfDocument, old: pdfium.PdfDocument, page: pdfium.PdfP
     npage.generate_content()
 
 
-def find_instrument(img) -> str:
+def find_instrument(img) -> defs.Instrument:
     """
     Groups ocr hitboxes and anticipates the leftmost group to contain the instrument.
     :param img: of the document to perform ocr on.
@@ -62,7 +63,7 @@ def find_instrument(img) -> str:
 
     groups = defs.Group.get_groups_from_df(data_df)
     groups.sort(key=lambda g: g.joint_box().left)
-    return groups[0].text
+    return defs.Instrument(groups[0].text)
 
 
 def split(path: str, title_keyword: str, scale: float = 4) -> None:
@@ -78,6 +79,7 @@ def split(path: str, title_keyword: str, scale: float = 4) -> None:
     # use file name as prefix: path/to/file.pdf -> file
     prefix = path.split("/")[-1].split(".")[0]
     for i, page in enumerate(pdf):
+        print(i)
         page_img = get_top25_as_img(page, scale)
 
         # if keyword was found this page should be a new title page.
@@ -89,7 +91,14 @@ def split(path: str, title_keyword: str, scale: float = 4) -> None:
                 print("Saved", doc_title)
 
             # extract instrument from the title page and generate the filename.
-            doc_title = f"splits/{prefix} - {find_instrument(page_img)}.pdf"
+            instr = rnd_chars(10)
+            try:
+                instr = find_instrument(page_img)
+            except Exception:
+                print(f"Failed to retrieve the instrument name - find it and rename it under {instr}")
+            doc_title = f"splits/{prefix} - {instr}.pdf"
+            while os.path.exists(doc_title):
+                doc_title = doc_title.split(".")[0] + rnd_chars(1) + ".pdf"
             doc = pdfium.PdfDocument.new()
 
         # add page to document either way.

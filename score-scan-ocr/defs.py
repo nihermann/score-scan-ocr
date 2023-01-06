@@ -1,37 +1,85 @@
-from typing import Dict, List
-import pandas as pd
+import os
+import re
+from dataclasses import dataclass
+from difflib import get_close_matches
+from typing import Dict, List, Set, Callable, Iterable, Union
+
 import numpy as np
+import pandas as pd
+
+import prefs
 
 
+class Instrument:
+    def __init__(self, string: str):
+        string, self.tune = self._extract_tune(string)
+        string, self.part = self._extract_parts(string)
+        self.name = self._extract_name(string)
+
+    @classmethod
+    def from_filename(cls, name: str):
+        instr = name.split(" - ")[-1].rstrip(".pdf")
+        rest, tune = cls._extract_tune(instr)
+        rest, part = cls._extract_parts(rest)
+        instr = CustomTranslation.nickname_to_id(rest)
+        return cls(f"{instr} {tune if tune else ''} {part if part else ''}".strip())
+
+    @staticmethod
+    def _extract_tune(name: str):
+        tunes = list(Inverse(Tunes).keys())
+        hits = [re.findall(fr"(.*\s|^){tune}(\s.*|$)", name) for tune in tunes]
+        mask = [len(hit) for hit in hits]
+        if sum(mask) == 1:
+            idx = np.argmax(mask)
+            id_tune = Inverse(Tunes)[tunes[idx]]
+            add_remainder = lambda left, right: left.strip() + right.rstrip()
+            return add_remainder(*hits[idx][0]), id_tune
+        return name, None
+
+    @staticmethod
+    def _extract_parts(name: str):
+        match = re.search(r"(\d(,|$))+", name)
+        if match:
+            start, end = match.span()
+            remainder = name[:start] + name[start + end:]
+            return remainder.strip(), name[start:end].strip()
+        return name, None
+
+    @staticmethod
+    def _extract_name(name: str):
+        matches = get_close_matches(name, list(Inverse(Instruments).keys()))
+        return Inverse(Instruments)[matches[0]] if matches else name
+
+    def metadata(self):
+        return {
+            "/Instrument": self.name,
+            "/Tune": self.tune if self.tune else "",
+            "/Part": self.part if self.part else ""
+        }
+
+    def __str__(self):
+        return CustomTranslation.nickname(self.name) + (f" {self.tune}" if self.tune else "") + (f" {self.part}" if self.part else "")
+
+    def __repr__(self):
+        return str(self)
+
+
+@dataclass
 class Document:
     title: str
     subtitle: str
-    instrument: str
+    instrument: Union[Instrument, str]
     arrangeur: str
     composer: str
     number: str
 
-    def __init__(self, title: str, subtitle: str, insturment: str, arrangeur: str, composer: str, number: str):
-        self.title = title
-        self.subtitle = subtitle
-        self.instrument = insturment
-        self.arrangeur = arrangeur
-        self.composer = composer
-        self.number = number
+    def __post_init__(self):
+        if isinstance(self.instrument, str):
+            self.instrument = Instrument(self.instrument)
 
     @classmethod
     def empty(cls):
         return cls("", "", "", "", "", "")
-
-    def __repr__(self):
-        return f"""
-        {self.title} {self.number}(
-            {self.subtitle}
-            {self.instrument}
-            Arr: {self.arrangeur}
-            {self.composer}
-        )
-        """
 
 
 def parse_solutions(solution_doc_path: str = "samples/solution.txt") -> List[Document]:
@@ -40,7 +88,7 @@ def parse_solutions(solution_doc_path: str = "samples/solution.txt") -> List[Doc
         lines = f.read().split("\n")
         for i in range(0, len(lines), 6):
             docs.append(
-                Document(*lines[i:i+6])
+                Document(*lines[i:i + 6])
             )
             if docs[-1].instrument:
                 docs[-1].instrument = "saxophone"
@@ -58,7 +106,7 @@ class Box:
         self.top = data_row.top
         self.bottom = data_row.top + data_row.height
 
-        self.mid = data_row.top + int(data_row.height/2)
+        self.mid = data_row.top + int(data_row.height / 2)
 
     def overlaps(self, other):
         if other.right < self.left or self.right < other.left:
@@ -68,7 +116,7 @@ class Box:
         return True
 
     def rdist(self, other):
-        return np.sqrt((self.mid - other.mid)**2 + (self.right - other.left)**2)
+        return np.sqrt((self.mid - other.mid) ** 2 + (self.right - other.left) ** 2)
 
     @classmethod
     def from_mid_right(cls, box, height, width):
@@ -76,7 +124,7 @@ class Box:
             "height": height,
             "width": width,
             "left": box.right,
-            "top": box.mid - height/2
+            "top": box.mid - height / 2
         }))
 
     def __repr__(self):
@@ -138,7 +186,7 @@ class Group:
         while i < len(box_pool):
             box0 = self.boxes[-1]
             # create a square that continues box0 with (h*1.5, h*1.5) as hitbox to find the next
-            hitbox = Box.from_mid_right(box0, self.median_h*1.5, self.median_h *1.5)
+            hitbox = Box.from_mid_right(box0, self.median_h * 1.5, self.median_h * 1.5)
             dists, idxs = [], []
             for j, box in enumerate(box_pool):
                 if hitbox.overlaps(box):
@@ -176,36 +224,85 @@ class Group:
         }))
 
 
-Instruments: Dict[str, set] = {
-    "en": {
-        # Wood
-        "Piccolo",
-        "Flute",
-        "Oboe",
-        "Clarinet",
-        "Bassoon",
-        "Saxophone",
-        # Wind
-        "Trumpet",
-        "Horn",
-        "Trombone",
-        "Euphonium",
-        "Tuba",
-        # Strings
-        "Viola",
-        "Cello",
-        "String Bass",
-        # Rhythm
-        "Timpani",
-        "Percussion",
-        "Drumset",
-        "Mallets"
-    },
-    "de": {
-
-    }
+Instruments: Dict[str, Set[str]] = {
+    # Wood
+    "Piccolo": {"Piccolo"},
+    "Flute": {"Flute", "Flöte", "Fl"},
+    "Oboe": {"Oboe"},
+    "Englishhorn": {"Englishhorn"},
+    "Clarinet": {"Clarinet", "Klarinette", "Klar"},
+    "Bassoon": {"Bassoon", "Fagott", "Fg"},
+    "Saxophone": {"Saxophone", "Sax", "Saxofon"},
+    # Wind
+    "Trumpet": {"Trumpet", "Trompete", "Trp"},
+    "Cornet": {"Cornet", "Kornett"},
+    "Bugle": {"Bugle", "Flügelhorn"},
+    "Horn": {"Horn", "Cor", "Cors", "Corn", "Corno", "Waldhorn"},
+    "Trombone": {"Trombone", "Posaune", "Pos"},
+    "Euphonium": {"Euphonium", "Euph"},
+    "Baritone": {"Baritone"},
+    "Tenorhoorn": {"Tenorhoorn", "Tenorhorn"},
+    "Tuba": {"Tuba"},
+    # Strings
+    "Violin": {"Violin", "Geige"},
+    "Viola": {"Viola", "Bratsche"},
+    "Cello": {"Cello", "Violoncello"},
+    "String Bass": {"String Bass", "Kontrabass"},
+    # Rhythm
+    "Timpani": {"Timpani", "Pauke"},
+    "Percussion": {"Percussion", "Perc", "Perc."},
+    "Tambourine": {"Tambourine", "Tamb"},
+    "Bass Drum & Cymbals": {"Bass Drum & Cymbals"},
+    "Drumset": {"Drumset", "Set", "Schlagzeug"},
+    "Mallets": {"Mallets"},
+    "Xylophone": {"Xylophone", "Xylo"},
+    "Marimbaphone": {"Marimbaphone", "Marimba"},
+    "Glockenspiel": {"Glockenspiel", "Bells"},
+    "Harp": {"Harfe", "Harp"},
+    "Piano": {"Piano", "Klavier", "Keys", "Keyboard"},
+    # Choir
+    "Soprano": {"Soprano", "Sopran"},
+    "Choir": {"Choir", "Chor"}
 }
 
 
+def add_variations(key: str, variations: List[str], drop: bool = False):
+    values = Instruments.pop(key) if drop else Instruments[key]
+    for var in variations:
+        Instruments[f"{var} {key}"] = {f"{var} {syn}" for syn in values}
+
+
+add_variations("Flute", ["Alt", "Tenor", "Bass"])
+add_variations("Clarinet", ["Solo", "Bass", "Contrabass", "Alt"])
+add_variations("Saxophone", ["Bass", "Tenor", "Alto", "Baritone", "Soprano"], drop=True)
+add_variations("Bassoon", ["Contrabass"])
+
+add_variations("Trumpet", ["Solo", "Piccolo", "Bass"])
+add_variations("Trombone", ["Bass"])
+
+add_variations("Soprano", ["Solo"])
+
+
+CustomTranslation = prefs.InstrPrefs()
+
+
+Inverse: Callable[[Dict[str, Iterable[str]]], Dict[str, str]] = lambda dictionary: {
+    value: key for key, values in dictionary.items() for value in values
+}
+
+InstrumentSynonyms = list(Inverse(Instruments).keys())
+
+Tunes: Dict[str, Set[str]] = {
+    "Es": {"Es", "Eb"},
+    "B": {"B", "Bb"},
+    "F": {"F"},
+    "C": {"C"},
+    "A": {"A"}
+}
+
 if __name__ == '__main__':
+    names = list(map(lambda x: x.split(" - ")[-1].split(".")[0], os.listdir("splits/")))
+    names.sort()
+
+    instr = [Instrument(name) for name in names]
     parse_solutions()
