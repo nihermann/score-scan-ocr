@@ -1,0 +1,10 @@
+<div class="list-group">
+    {% for file in files %}
+        <a class="list-group-item list-group-item-action" onclick="onclick_path('{{ file.file_name }}')" style="padding: .35rem .5rem;">
+            <div class="d-flex w-100 flex-column">
+                <span class="mb-1">{{ file.file_name }}</span>
+                <small>{{ file.time_since_creation_str }}</small>
+            </div>
+        </a>
+    {% endfor %}
+</div>

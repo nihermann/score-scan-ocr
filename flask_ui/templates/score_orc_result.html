@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% from "snippets/navbar.html" import navbar %}
+{% from "snippets/filesearcher.html" import filesearcher, scripts %}
+
+
+{% block title %}Scanner - Score OCR{% endblock %}
+
+{% block navbar %}
+    {{ navbar("/score-ocr") }}
+{% endblock %}
+
+{% block body %}
+    <div class="container pt-3">
+        <div class="row">
+            {{ filesearcher() }}
+
+            <div id="data" class="col-9"></div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block scripts %}
+    <script src="{{ url_for("static", filename="messaging.js") }}" defer></script>
+    {{ scripts() }}
+{% endblock %}

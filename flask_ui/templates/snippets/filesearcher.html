@@ -1,0 +1,43 @@
+{% macro filesearcher() %}
+    <div class="col-3 d-flex h-100 flex-column">
+        <!-- File Tree -->
+        <form novalidate>
+            <label class="form-text" for="path-input">File Source Directory</label>
+            <input type="text" class="form-control mb-2" id="path-input" placeholder="path/to/dir/to/watch" aria-describedby="invalfeedback">
+            <div id="invalfeedback" class="invalid-feedback">Path is not valid!</div>
+        </form>
+        <div class="overflow-auto">
+            <div id="file-list"></div>
+        </div>
+    </div>
+{% endmacro %}
+
+{% macro scripts() %}
+    <script>
+        validate = () => {
+            $.ajax({
+                url: "{{ url_for('ocr.set_root') }}",
+                type: "post",
+                data: {input: $("#path-input").val()},
+                success: function () {
+                    const input = $("#path-input");
+                    input.removeClass("is-invalid");
+                    input.addClass("is-valid");
+                },
+                error: function () {
+                    const input = $("#path-input");
+                    input.addClass("is-invalid");
+                    input.removeClass("is-valid");
+                }
+            });
+        }
+        $("#path-input").on("blur", validate);
+        $("#path-input").on("keypress", ev => {
+            if (ev.key === "Enter") {
+                validate();
+                ev.preventDefault();
+            }
+            return true;
+        });
+    </script>
+{% endmacro %}

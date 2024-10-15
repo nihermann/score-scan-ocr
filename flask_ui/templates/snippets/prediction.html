@@ -1,0 +1,69 @@
+<div class="row">
+    <!-- Image of pdf header -->
+    <img src="{{ url_for('static', filename='temp/' + img + '.jpg') }}" class="img-thumbnail h2 w-auto" alt="Header of current pdf">
+</div>
+<div class="row">
+    <!-- Score Description -->
+    <form class="w-100 needs-validation" novalidate>
+    <div class="container">
+        <div class="form-row">
+            <div class="col-md-10 mb-3">
+                <label for="title">Title</label>
+                <input type="text" class="form-control" id="title" value="{{ doc.title }}" required>
+                <div class="valid-tooltip">
+                    Looks good!
+                </div>
+            </div>
+            <div class="col-md-2 mb-3">
+                <label for="number">Number</label>
+                <input type="text" class="form-control" id="number" value="{{ doc.number }}">
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="col-md-12 mb-3">
+                <label for="subtitle">Subtitle</label>
+                <input type="text" class="form-control" id="subtitle" value="{{ doc.subtitle }}" required>
+                <div class="valid-tooltip">
+                    Looks good!
+                </div>
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="col-md-6 mb-3">
+                <label for="composer">Composer</label>
+                <input type="text" class="form-control" id="composer" value="{{ doc.composer }}">
+            </div>
+            <div class="col-md-6 mb-3">
+                <label for="arrangeur">Arrangeur</label>
+                <input type="text" class="form-control" id="arrangeur" value="{{ doc.arrangeur }}">
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="col-md-7 mb-3">
+                <label for="instrument">Instrument</label>
+                <select class="custom-select js-custom-select" id="instrument">
+                    <option {{ "selected" if doc.instrument.name not in instruments else "" }} disabled value="">Choose...</option>
+                    {% for instrument in instruments %}
+                        <option {{ "selected" if doc.instrument.name == instrument else "" }} value="{{ instrument }}">{{ instrument }}</option>
+                    {% endfor %}
+                </select>
+                <div class="invalid-tooltip">
+                    Please select a valid instrument.
+                </div>
+            </div>
+            <div class="col-md-2 mb-3">
+                <label for="tune">Tune</label>
+                <input type="text" class="form-control" id="tune" value="{{ doc.instrument.tune if doc.instrument.tune != None else "" }}">
+            </div>
+            <div class="col-md-3 mb-3">
+                <label for="part">Part</label>
+                <input type="text" class="form-control" id="part" value="{{ doc.instrument.part if doc.instrument.part != None else "" }}">
+            </div>
+        </div>
+        <button class="btn btn-primary" type="submit">Save</button>
+    </div>
+    </form>
+</div>
+<div class="row">
+    <!-- Place to fill in pages -->
+</div>
