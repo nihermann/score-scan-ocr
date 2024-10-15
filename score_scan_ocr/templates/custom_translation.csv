@@ -1,0 +1,51 @@
+Instrument,Nickname,Folder
+Piccolo,Picc,01 Flöte
+Flute,Fl,01 Flöte
+Oboe,Oboe,02 Oboe
+Englishhorn,Engl. Hr,02 Oboe
+Clarinet,Klar,03 Klarinette
+Bassoon,Fagott,04 Fagott
+Trumpet,Trp,06 Trompete
+Cornet,Cornett,06 Trompete
+Bugle,Flh,06 Trompete
+Horn,Horn,07 Horn
+Trombone,Pos,09 Posaune
+Euphonium,Euph,08 Euphonium
+Baritone,Bar,08 Euphonium
+Tenorhorn,Ten,08 Euphonium
+Tuba,Tuba,10 Tuba
+Violin,Violine,20 others
+Viola,,20 others
+Cello,,15 Cello
+String Bass,Kontrabass,11 Kontrabass
+Timpani,Pauke,12 Schlagwerk
+Percussion,Perc,12 Schlagwerk
+Tambourine,Tamb,12 Schlagwerk
+Bass Drum & Cymbals,,12 Schlagwerk
+Drumset,Set,12 Schlagwerk
+Mallets,,12 Schlagwerk
+Xylophone,Xylo,12 Schlagwerk
+Marimbaphone,Marimba,12 Schlagwerk
+Glockenspiel,Bells,12 Schlagwerk
+Harp,Harfe,14 Harfe
+Piano,Klavier,13 Klavier
+Soprano,Sopran,16 Vocals
+Choir,Chor,16 Vocals
+Alt Flute,Alt Fl,01 Flöte
+Tenor Flute,Ten Fl,01 Flöte
+Bass Flute,Bass Fl,01 Flöte
+Solo Clarinet,Solo Klar,03 Klarinette
+Bass Clarinet,Bass Klar,03 Klarinette
+Contrabass Clarinet,Kb Klar,03 Klarinette
+Alt Clarinet,Alt Klar,03 Klarinette
+Bass Saxophone,Bass-Sax,05 Saxophon
+Tenor Saxophone,Ten-Sax,05 Saxophon
+Alto Saxophone,Alt-Sax,05 Saxophon
+Baritone Saxophone,Bar-Sax,05 Saxophon
+Soprano Saxophone,Sop-Sax,05 Saxophon
+Contrabass Bassoon,Kb Fagott,04 Fagott
+Solo Trumpet,Solo Trp,06 Trompete
+Piccolo Trumpet,Picc Trp,06 Trompete
+Bass Trumpet,Bass Trp,08 Euphonium
+Bass Trombone,Bass Pos,09 Posaune
+Solo Soprano,Solo Sopran,16 Vocals

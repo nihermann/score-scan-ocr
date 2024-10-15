@@ -1,11 +1,11 @@
 import pandas as pd
-import defs
+from score_scan_ocr import defs
 
 
 class InstrPrefs:
     def __init__(self, file_path: str = "templates/custom_translation.csv"):
-        self.file_path = file_path
-        self._data = pd.read_csv(file_path)
+        self.file_path = "/".join(__file__.split("/")[:-1]) + "/" + file_path
+        self._data = pd.read_csv(self.file_path)
 
         missing_instrs = set(defs.Instruments.keys()).difference(self._data["Instrument"])
         self._data = self._data.set_index("Instrument")

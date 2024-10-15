@@ -7,22 +7,68 @@ from typing import Dict, List, Set, Callable, Iterable, Union
 import numpy as np
 import pandas as pd
 
-import prefs
+import utils
+
+# import score_scan_ocr.prefs as prefs
+
+
+class InstrumentNotFoundException(Exception):
+    pass
+
+
+class InstrPrefs:
+    def __init__(self, file_path: str = "templates/custom_translation.csv"):
+        self.file_path = "/".join(__file__.split("/")[:-1]) + "/" + file_path
+        self._data = pd.read_csv(self.file_path)
+
+        missing_instrs = set(Instruments.keys()).difference(self._data["Instrument"])
+        self._data = self._data.set_index("Instrument")
+        for instr in missing_instrs:
+            self._data.loc[instr] = {"Nickname": "", "Folder": ""}
+
+        # Order and get rid of invalid user extensions
+        self._data = self._data.loc[list(Instruments.keys())]
+        self._data.to_csv(self.file_path)
+
+    def __contains__(self, item):
+        return item in self._data.index
+
+    def nickname(self, instrument) -> str:
+        if instrument not in self:
+            return instrument
+        name = self._data.loc[instrument]["Nickname"]
+        if pd.isna(name):
+            name = instrument
+        return name
+
+    def dest_folder(self, instrument) -> str:
+        return self._data.loc[instrument]["Folder"]
+
+    def nickname_to_id(self, nickname: str) -> str:
+        data = self._data.reset_index().set_index("Nickname")
+        return data.loc[nickname]["Instrument"] if nickname in data.index else nickname
 
 
 class Instrument:
-    def __init__(self, string: str):
+    def __init__(self, string: str, should_raise: bool = True):
+        string = utils.caps_to_capitalized_nouns(string)
         string, self.tune = self._extract_tune(string)
-        string, self.part = self._extract_parts(string)
-        self.name = self._extract_name(string)
+        string, self.part = self._extract_parts(string.lower())
+        self.name = self._extract_name(string, should_raise=should_raise)
 
     @classmethod
-    def from_filename(cls, name: str):
-        instr = name.split(" - ")[-1].rstrip(".pdf")
+    def from_filename(cls, name: str, should_raise: bool = True):
+        instr = name.split(" - ")[-1]
+        if instr.endswith(".pdf"):
+            instr = instr[:-4]
         rest, tune = cls._extract_tune(instr)
         rest, part = cls._extract_parts(rest)
-        instr = CustomTranslation.nickname_to_id(rest)
-        return cls(f"{instr} {tune if tune else ''} {part if part else ''}".strip())
+        instr = CustomTranslation.nickname_to_id(rest.strip())
+        return cls(f"{instr} {tune if tune else ''} {part if part else ''}".strip(), should_raise=should_raise)
+
+    @classmethod
+    def parse(cls, string: str, should_raise: bool = True):
+        return cls(string, should_raise=should_raise)
 
     @staticmethod
     def _extract_tune(name: str):
@@ -46,9 +92,13 @@ class Instrument:
         return name, None
 
     @staticmethod
-    def _extract_name(name: str):
+    def _extract_name(name: str, should_raise: bool = True):
         matches = get_close_matches(name, list(Inverse(Instruments).keys()))
-        return Inverse(Instruments)[matches[0]] if matches else name
+        if not matches:
+            if should_raise:
+                raise InstrumentNotFoundException()
+            return name
+        return Inverse(Instruments)[matches[0]]
 
     def metadata(self):
         return {
@@ -241,7 +291,7 @@ Instruments: Dict[str, Set[str]] = {
     "Trombone": {"Trombone", "Posaune", "Pos"},
     "Euphonium": {"Euphonium", "Euph"},
     "Baritone": {"Baritone"},
-    "Tenorhoorn": {"Tenorhoorn", "Tenorhorn"},
+    "Tenorhorn": {"Tenorhoorn", "Tenorhorn"},
     "Tuba": {"Tuba"},
     # Strings
     "Violin": {"Violin", "Geige"},
@@ -283,7 +333,7 @@ add_variations("Trombone", ["Bass"])
 add_variations("Soprano", ["Solo"])
 
 
-CustomTranslation = prefs.InstrPrefs()
+CustomTranslation = InstrPrefs()
 
 
 Inverse: Callable[[Dict[str, Iterable[str]]], Dict[str, str]] = lambda dictionary: {
