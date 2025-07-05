@@ -1,100 +1,104 @@
-import imagesize
-import numpy as np
-import cv2
+from pathlib import Path
 
+import torch
+from torch import nn
+from torch.nn import CrossEntropyLoss
+from torch.optim import Adam
+from torch.utils.data import DataLoader
+from torchmetrics.classification import Accuracy, AUROC, Precision, Recall
 from tqdm import tqdm
 
-from utx.statistics import images
-from utx import imagex
-from utx import osx
-from utx.plot import plot
-import matplotlib.pyplot as plt
-
-import tensorflow as tf
+from data_loader import get_balanced_tensor_datasets
+from model import TinyConvNet
 
 
-SIZE = 2340//2, 1650//2
+def save_model(model: nn.Module, path: str = "model.pth") -> None:
+    """
+    Saves the model state dictionary to the specified path.
+    :param model: nn.Module - the model to save.
+    :param path: str - the path where the model will be saved.
+    :return: None
+    """
+    Path(path).parent.mkdir(exist_ok=True)
+    torch.save(model.state_dict(), path)
+    print(f"Model saved to {path}")
 
 
-def show(img):
-    cv2.imshow("image", img)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+def train_model(
+    model: nn.Module, train_loader: DataLoader, val_loader: DataLoader, test_loader: DataLoader,
+        num_epochs: int = 10, lr: float = 1e-3, device: str = "cuda" if torch.cuda.is_available() else "cpu"
+) -> nn.Module:
+    model = model.to(device)
+
+    loss_fn = CrossEntropyLoss(weight=torch.tensor([0.33, 0.67], device=device))  # Adjust weights for class imbalance (inverse of class distribution)
+    optimizer = Adam(model.parameters(), lr=lr)
+    acc = Accuracy(task="multiclass", num_classes=2).to(device)
+    auroc = AUROC(task="multiclass", num_classes=2).to(device)
+    precision = Precision(task="multiclass", num_classes=2).to(device)
+    recall = Recall(task="multiclass", num_classes=2).to(device)
+
+    metrics = [acc, auroc, precision, recall]
+
+    for epoch in range(num_epochs):
+        model.train()
+        total_loss = 0.0
+        auroc.reset()
+        for images, labels in tqdm(train_loader, desc=f"Epoch {epoch+1}/{num_epochs}"):
+            images, labels = images.to(device), labels.to(device)
+            preds = model(images)
+            loss = loss_fn(preds, labels)
+
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            with torch.no_grad():
+                auroc(preds, labels)
+            total_loss += loss.item()
+
+        print(f"Train loss: {total_loss/len(train_loader):.4f} AUROC: {auroc.compute().item():.4f}")
+
+        # Validation
+        model.eval()
+        for metric in metrics:
+            metric.reset()
+        with torch.no_grad():
+            for images, labels in val_loader:
+                images, labels = images.to(device), labels.to(device)
+                preds = model(images)
+                for metric in metrics:
+                    metric(preds, labels)
+        val_acc = acc.compute().item()
+        val_auroc = auroc.compute().item()
+        val_precision = precision.compute().item()
+        val_recall = recall.compute().item()
+
+        print(f"\nValidation - Accuracy: {val_acc:.4f}, AUROC: {val_auroc:.4f}, Precision: {val_precision:.4f}, Recall: {val_recall:.4f}")
+
+    print("Evaluating on Test Dataset")
+    for metric in metrics:
+        metric.reset()
+    with torch.no_grad():
+        lbl = 0
+        for images, labels in test_loader:
+            images, labels = images.to(device), labels.to(device)
+            lbl += labels.sum().item()
+            preds = model(images)
+            for metric in metrics:
+                metric(preds, labels)
+
+    print(f"Test - Accuracy: {acc.compute().item():.4f}, AUROC: {auroc.compute().item():.4f}, Precision: {precision.compute().item():.4f}, Recall: {recall.compute().item():.4f}")
+    print(f"Total positive labels in test set: {lbl}")
+    return model
 
 
-def preprocess() -> None:
-    paths = osx.list_files_relative_recursively("validated_data", where=lambda p: p.endswith(".png"))
-    dims = np.array([imagesize.get(path) for path in paths]).T  # [2, N]
-    aspect_ratio = dims[0] / dims[1]
-    plt.hist(aspect_ratio)
-    plt.show()
-    indices = np.argwhere(aspect_ratio > 1).reshape(-1)
-    for i in tqdm(indices, desc="Adjusting Aspect Ratios"):
-        img = imagex.load(paths[i])
-        imagex.save(np.rot90(img), paths[i])
 
-    print(images.get_image_stats(paths))
+if __name__ == "__main__":
+    v = "tinyv2.1"  # set to the desired model version to train
 
-
-def get_model() -> tf.keras.Model:
-    inp = tf.keras.Input((*SIZE, 3))
-    out = tf.keras.layers.Conv2D(16, 5, strides=2)(inp)
-    out = tf.keras.layers.Activation("relu")(out)
-
-    out = tf.keras.layers.Conv2D(16, 5, strides=2)(out)
-    out = tf.keras.layers.Activation("relu")(out)
-
-    out = tf.keras.layers.GlobalAvgPool2D()(out)
-    out = tf.keras.layers.Dense(1)(out)
-    out = tf.keras.layers.Activation("sigmoid")(out)
-
-    return tf.keras.Model(inp, out)
-
-
-def get_data(validation: bool = False):
-    return tf.keras.utils.image_dataset_from_directory(
-        "./validated_data",
-        image_size=SIZE,
-        interpolation="bilinear",
-        color_mode="rgb",
-        batch_size=32,
-        labels="inferred",
-        label_mode="binary",
-        class_names=["no_title", "title"],
-        validation_split=.3,
-        subset="validation" if validation else "training",
-        shuffle=not validation,
-        seed=42
-    ).map(
-        lambda img, lbl: (tf.image.per_image_standardization(img), lbl)
+    model = TinyConvNet(input_channels=1, num_classes=2)
+    train_loader, val_loader, test_loader = get_balanced_tensor_datasets(
+        root_dir="down_data", batch_size=64, val_size=0.2, test_size=0.1, flip_augment=True
     )
 
-
-def train():
-    model = get_model()
-
-    model.compile(
-        optimizer="adam",
-        loss="bce",
-        metrics=[
-            tf.keras.metrics.BinaryAccuracy(),
-            tf.keras.metrics.F1Score()
-        ]
-    )
-
-    model.summary()
-
-    train_gen = get_data()
-    val_gen = get_data(validation=True)
-
-    model.fit(
-        x=train_gen,
-        validation_data=val_gen,
-        class_weight={0: .2, 1: .8},
-        epochs=10
-    )
-
-
-if __name__ == '__main__':
-    # preprocess()
-    train()
+    trained_model = train_model(model, train_loader, val_loader, test_loader, num_epochs=50)
+    save_model(trained_model, f"models/model_{v}.pth")
